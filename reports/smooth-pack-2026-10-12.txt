@@ -1,0 +1,5 @@
+Average fraction of spectral energy above 2 kHz across 30 WAV files:
+creamy: 13.1775%
+smooth: 0.1980%
+Change in high-frequency fraction: -18.23 dB
+Original synthesized material; this spectral comparison is not a listening assessment.

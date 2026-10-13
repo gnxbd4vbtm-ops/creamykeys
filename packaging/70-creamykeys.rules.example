@@ -1,0 +1,5 @@
+# EXAMPLE ONLY: administrator review and approval required before use.
+# Requires an existing creamykeys group and reviewed group membership.
+# Restricts group read access to udev-identified physical keyboards.
+# Changing GROUP may affect software that previously relied on group input.
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_KEYBOARD}=="1", ENV{ID_BUS}=="?*", GROUP="creamykeys", MODE="0640"

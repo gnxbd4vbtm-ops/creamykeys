@@ -1,0 +1,9 @@
+enabled = true
+volume = 0.35
+sound_pack = "smooth"
+pitch_variation = 0.025
+randomize_samples = true
+play_on_repeat = false
+max_voices = 24
+follow_default_sink = true
+idle_timeout_ms = 5000

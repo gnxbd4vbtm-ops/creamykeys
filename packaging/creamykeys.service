@@ -1,0 +1,19 @@
+[Unit]
+Description=CreamyKeys keyboard sound daemon
+After=pipewire.service wireplumber.service
+PartOf=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/creamykeys daemon
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=graphical-session.target

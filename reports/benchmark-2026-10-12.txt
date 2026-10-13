@@ -1,0 +1,20 @@
+Synthetic events only; no physical keystrokes are injected or recorded.
+idle: 0.0008% of one core, 0.121 ms CPU over 15.036 s
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=creamy audio_state=2 audio_active=false benchmark=false
+played=0 queue_drops=0 voice_steals=0 callbacks=0 empty_buffers=0 last_quantum=0 frames @48000 Hz
+input_to_callback_mean_ms=0 max_ms=0 (software only; synthetic benchmark timestamps are enqueue times)
+Synthetic typing (10 events/s) for 5 seconds; keyboard capture paused. Run status after completion.
+typing: 1.3729% of one core, 73.053 ms CPU over 5.321 s
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=creamy audio_state=3 audio_active=true benchmark=false
+played=50 queue_drops=0 voice_steals=0 callbacks=1938 empty_buffers=0 last_quantum=128 frames @48000 Hz
+input_to_callback_mean_ms=2.67603 max_ms=56.9023 (software only; synthetic benchmark timestamps are enqueue times)
+Synthetic burst (600 category events/s) for 5 seconds; keyboard capture paused. Run status after completion.
+burst: 2.2624% of one core, 120.445 ms CPU over 5.324 s
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=creamy audio_state=3 audio_active=true benchmark=false
+played=3050 queue_drops=0 voice_steals=2976 callbacks=3944 empty_buffers=0 last_quantum=128 frames @48000 Hz
+input_to_callback_mean_ms=1.42831 max_ms=56.9023 (software only; synthetic benchmark timestamps are enqueue times)
+VmHWM:	   11556 kB
+VmRSS:	   11556 kB
+Threads:	3
+MemoryCurrent=3756032
+MemoryPeak=4018176

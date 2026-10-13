@@ -1,0 +1,54 @@
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=5000 audio_state=2 audio_active=false benchmark=false
+played=0 queue_drops=0 voice_steals=0 callbacks=0 empty_buffers=0 last_quantum=0 frames @48000 Hz
+input_to_callback_mean_ms=0 max_ms=0 (software only; synthetic benchmark timestamps are enqueue times)
+ck-a:playback_FL
+  |<- creamykeys:output_FL
+ck-a:playback_FR
+  |<- creamykeys:output_FR
+creamykeys:output_FL
+  |-> ck-a:playback_FL
+creamykeys:output_FR
+  |-> ck-a:playback_FR
+Synthetic typing (10 events/s) for 5 seconds; keyboard capture paused. Run status after completion.
+ck-b:playback_FL
+  |<- creamykeys:output_FL
+ck-b:playback_FR
+  |<- creamykeys:output_FR
+creamykeys:output_FL
+  |-> ck-b:playback_FL
+creamykeys:output_FR
+  |-> ck-b:playback_FR
+PASS: existing stream followed default sink from ck-a to ck-b while playing.
+enabled=false keyboards=0 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=5000 audio_state=3 audio_active=false benchmark=false
+played=50 queue_drops=0 voice_steals=0 callbacks=1996 empty_buffers=0 last_quantum=128 frames @48000 Hz
+input_to_callback_mean_ms=0.896286 max_ms=7.04094 (software only; synthetic benchmark timestamps are enqueue times)
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=5000 audio_state=2 audio_active=false benchmark=false
+played=50 queue_drops=0 voice_steals=0 callbacks=1996 empty_buffers=0 last_quantum=128 frames @48000 Hz
+input_to_callback_mean_ms=0.896286 max_ms=7.04094 (software only; synthetic benchmark timestamps are enqueue times)
+PASS: disable closes input descriptors; enable rediscovers keyboard.
+PASS: singleton lock rejects second instance.
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=0 audio_state=3 audio_active=true benchmark=false
+PASS: warm-audio configuration activates stream without a keypress.
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=5000 audio_state=2 audio_active=false benchmark=false
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=5000 audio_state=-1 audio_active=false benchmark=false
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=5000 audio_state=2 audio_active=false benchmark=false
+played=50 queue_drops=0 voice_steals=0 callbacks=2190 empty_buffers=0 last_quantum=128 frames @48000 Hz
+input_to_callback_mean_ms=0.896286 max_ms=7.04094 (software only; synthetic benchmark timestamps are enqueue times)
+ck-a:playback_FL
+  |<- creamykeys:output_FL
+ck-a:playback_FR
+  |<- creamykeys:output_FR
+creamykeys:output_FL
+  |-> ck-a:playback_FL
+creamykeys:output_FR
+  |-> ck-a:playback_FR
+Synthetic typing (10 events/s) for 5 seconds; keyboard capture paused. Run status after completion.
+enabled=true keyboards=1 inaccessible_devices=0 volume=0.35 pack=smooth idle_timeout_ms=5000 audio_state=3 audio_active=true benchmark=false
+PASS: daemon reconnects and resumes mixing after private PipeWire restart.
+S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+C   29      0      0    ---     ---   ---   ---     0                  Dummy-Driver
+C   30      0      0    ---     ---   ---   ---     0                  Freewheel-Driver
+C   42      0      0    ---     ---   ---   ---     0                  ck-a
+C   47      0      0    ---     ---   ---   ---     0                  ck-b
+C   52      0      0    ---     ---   ---   ---     0                  creamykeys
+PASS: clean daemon restart reclaims socket and lock.
