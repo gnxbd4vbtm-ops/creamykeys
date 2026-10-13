@@ -1,5 +1,5 @@
 /build*/
 *.core
 .cache
-reports/*
-reports/
+reports/*.txt
+reports
