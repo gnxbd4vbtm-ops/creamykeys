@@ -1,6 +1,6 @@
 # CreamyKeys
 
-A native C++20 keyboard sound daemon for CachyOS and KDE Plasma on Wayland. It reads physical keyboard events with libevdev, mixes overlapping sounds through the native PipeWire API, and follows the selected default output through WirePlumber. No GUI or application window is needed.
+A native C++20 keyboard sound daemon for CachyOS and KDE Plasma on Wayland. It reads physical and virtual keyboard events with libevdev, mixes overlapping sounds through the native PipeWire API, and follows the selected default output through WirePlumber. No GUI or application window is needed.
 
 The selected `smooth` pack contains 30 original synthesized variations with a rounded 2.2 ms attack and cascaded filtering to reduce sharp clicks: normal keys, Space, Enter, Backspace, modifiers, and special keys. It is soft, low-pitched keyboard-inspired foley. It is **not a recording of Oil Kings or another real switch**; audible realism still needs your listening assessment. The WAV files are CC0; the code is MIT.
 
@@ -125,7 +125,7 @@ A researched recording, [Keyboard Typing 10 (WhiteFox, Mechanical) by grcekh](ht
 
 ## Audio and input behavior
 
-The main thread blocks in epoll on libevdev descriptors, inotify, a private same-user Unix socket, signal descriptors, and armed timers. Keyboard classification requires letter/Enter capabilities and a nonvirtual bus. Dedicated keypads without those capabilities are currently excluded. Hotplug notifications rescan devices; libevdev synchronization drops recovered state events instead of replaying lost presses. The daemon never uses EVIOCGRAB, writes input events, reconstructs text, or sends input data over the network.
+The main thread blocks in epoll on libevdev descriptors, inotify, a private same-user Unix socket, signal descriptors, and armed timers. Keyboard classification accepts devices with typing/navigation/function-key capabilities, including sparse uinput macro devices such as Lunge Swapper. Virtual and unspecified bus types are accepted. Mouse-only devices, power-button-only devices, and mouse-button events on hybrid devices are excluded. Hotplug notifications rescan devices; libevdev synchronization drops recovered state events instead of replaying lost presses. The daemon never uses EVIOCGRAB, writes input events, reconstructs text, or sends input data over the network.
 
 Each descriptor tracks held-key state. Reports with the same physical identity, key, and a timestamp within 2 ms are suppressed as duplicates. Separate keyboards have independent identities. This is a duplicate-report heuristic, not a guarantee for every unusual composite keyboard or firmware.
 

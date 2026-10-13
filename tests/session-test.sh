@@ -54,7 +54,7 @@ if find "/proc/$daemon_pid/fd" -type l -printf '%l\n' | rg -q '^/dev/input/event
  printf '%s\n' 'FAIL: input descriptor remains open while disabled'; exit 1
 fi
 "$binary" enable
-"$binary" status | rg -q 'keyboards=1'
+"$binary" status | rg -q 'keyboards=[1-9][0-9]*'
 printf '%s\n' 'PASS: disable closes input descriptors; enable rediscovers keyboard.'
 if "$binary" daemon >"$test_dir/duplicate.log" 2>&1; then
  printf '%s\n' 'FAIL: duplicate daemon started'; exit 1
@@ -91,5 +91,5 @@ wait "$daemon_pid"
 daemon_pid=
 "$binary" daemon >"$test_dir/daemon-restart.log" 2>&1 & daemon_pid=$!
 sleep 1
-"$binary" status | rg -q 'keyboards=1'
+"$binary" status | rg -q 'keyboards=[1-9][0-9]*'
 printf '%s\n' 'PASS: clean daemon restart reclaims socket and lock.'

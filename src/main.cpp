@@ -1,4 +1,5 @@
 #include "core.hpp"
+#include "input.hpp"
 #include "mechvibes.hpp"
 #include <algorithm>
 #include <bitset>
@@ -497,9 +498,7 @@ struct Daemon
 			libevdev *ev = nullptr;
 			if (libevdev_new_from_fd(fd, &ev) < 0)
 				continue;
-			bool keyboard = libevdev_has_event_code(ev, EV_KEY, KEY_A) && libevdev_has_event_code(ev, EV_KEY, KEY_Z) && libevdev_has_event_code(ev, EV_KEY, KEY_ENTER);
-			int bus = libevdev_get_id_bustype(ev);
-			if (!keyboard || bus == BUS_VIRTUAL || bus == 0)
+			if (!keyboard_device(ev))
 			{
 				libevdev_free(ev);
 				continue;
@@ -507,12 +506,7 @@ struct Daemon
 			libevdev_set_clock_id(ev, CLOCK_MONOTONIC);
 			const char *phys = libevdev_get_phys(ev);
 			const char *uniq = libevdev_get_uniq(ev);
-			std::string identity = phys ? phys : p;
-			auto suffix = identity.rfind("/input");
-			if (suffix != identity.npos)
-				identity.resize(suffix);
-			if (uniq)
-				identity += uniq;
+			std::string identity = input_identity(phys,uniq,p);
 			int n = fd;
 			add(n);
 			devices.emplace(n, std::make_unique<Device>(std::move(fd), ev, p, identity));
@@ -597,7 +591,7 @@ struct Daemon
 				devices.erase(fd);
 				break;
 			}
-			if (e.type != EV_KEY || e.code >= KEY_CNT)
+			if (e.type != EV_KEY || !keyboard_event(e.code))
 				continue;
 			if (e.value == 0)
 			{
