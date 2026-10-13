@@ -1,3 +1,0 @@
-PASS: OGG native decoding and offline selection without starting daemon
-PASS: FLAC native decoding and offline selection without starting daemon
-PASS: MP3 native decoding and offline selection without starting daemon
