@@ -408,10 +408,11 @@ struct Device
 	FD fd;
 	libevdev *ev = nullptr;
 	std::string path, identity;
+	bool virtual_device = false;
 	std::bitset<KEY_CNT> held;
 
-	Device(FD f, libevdev *e, std::string p, std::string ident)
-		: fd(std::move(f)), ev(e), path(std::move(p)), identity(std::move(ident)) {}
+	Device(FD f, libevdev *e, std::string p, std::string ident, bool virt)
+		: fd(std::move(f)), ev(e), path(std::move(p)), identity(std::move(ident)), virtual_device(virt) {}
 
 	~Device()
 	{
@@ -506,10 +507,11 @@ struct Daemon
 			libevdev_set_clock_id(ev, CLOCK_MONOTONIC);
 			const char *phys = libevdev_get_phys(ev);
 			const char *uniq = libevdev_get_uniq(ev);
-			std::string identity = input_identity(phys,uniq,p);
+			std::string identity = input_identity(phys, uniq, p);
+			bool virtual_device = virtual_input(p) || libevdev_get_id_bustype(ev) == BUS_VIRTUAL;
 			int n = fd;
 			add(n);
-			devices.emplace(n, std::make_unique<Device>(std::move(fd), ev, p, identity));
+			devices.emplace(n, std::make_unique<Device>(std::move(fd), ev, p, identity, virtual_device));
 		}
 	}
 
@@ -592,6 +594,10 @@ struct Daemon
 				break;
 			}
 			if (e.type != EV_KEY || !keyboard_event(e.code))
+				continue;
+			// Virtual macro devices often inject KEY_2. Ignore only that key
+			// from virtual devices so physical keyboards still play normally.
+			if (d.virtual_device && e.code == KEY_2)
 				continue;
 			if (e.value == 0)
 			{

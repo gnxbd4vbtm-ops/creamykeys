@@ -16,7 +16,7 @@ Run bare `creamykeys` to toggle the daemon on or off. Your choice is remembered:
 
 These commands work in fish and bash:
 
-```fish
+```bash
 creamykeys # toggle on/off and remember across reboots
 creamykeys status
 creamykeys disable
@@ -39,9 +39,9 @@ A benchmark plays synthetic category events for five seconds, temporarily closes
 
 ## Build and install
 
-Dependencies: GCC or Clang with C++20, CMake, Ninja, pkg-config, PipeWire, libevdev, libsndfile, libarchive, nlohmann-json headers, and systemd. These were already installed on the inspected CachyOS host. If missing, review the package changes before running:
+Dependencies: GCC or Clang with C++20, CMake, Ninja, pkg-config, PipeWire, libevdev, libsndfile, libarchive, nlohmann-json headers, and systemd. If missing, review the package changes before running:
 
-```fish
+```bash
 sudo pacman -S --needed base-devel cmake ninja pkgconf pipewire libevdev libsndfile libarchive nlohmann-json
 cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release
@@ -51,7 +51,7 @@ bash packaging/install.sh
 
 The installer needs no root access when keyboard permissions already exist. It installs only user files and preserves existing configuration, packs, and on/off state. A fresh install does not start or enable the service. Upgrading an already running service restarts it and checks IPC. On this desktop it detected one keyboard and reused the account's existing input permissions. It does not modify your groups, udev rules, PipeWire settings, or other services.
 
-```fish
+```bash
 bash packaging/uninstall.sh
 ```
 
@@ -81,7 +81,7 @@ Live changes reset active sounds before swapping the new settings. A successful 
 
 Import and select a downloaded pack directly, keeping quotes around paths with spaces:
 
-```fish
+```bash
 creamykeys -s "/home/byte/Downloads/banana split lubed.zip"
 creamykeys --soundpack /home/byte/Downloads/cherrymx-blue-pbt.zip
 creamykeys -s /home/byte/Downloads/Creams.zip
@@ -117,15 +117,13 @@ Run `creamykeys pack set NAME` to validate and select a new pack. Restart after 
 
 The original fallback can be regenerated with:
 
-```fish
+```bash
 build-release/creamykeys-generate soundpacks/smooth
 ```
 
-A researched recording, [Keyboard Typing 10 (WhiteFox, Mechanical) by grcekh](https://freesound.org/people/grcekh/sounds/546167/), is marked CC0 by its author. It is a continuous typing recording rather than the requested isolated lubed-linear variations, so it was not bundled. No third-party pack with uncertain licensing was downloaded.
-
 ## Audio and input behavior
 
-The main thread blocks in epoll on libevdev descriptors, inotify, a private same-user Unix socket, signal descriptors, and armed timers. Keyboard classification accepts devices with typing/navigation/function-key capabilities, including sparse uinput macro devices such as Lunge Swapper. Virtual and unspecified bus types are accepted. Mouse-only devices, power-button-only devices, and mouse-button events on hybrid devices are excluded. Hotplug notifications rescan devices; libevdev synchronization drops recovered state events instead of replaying lost presses. The daemon never uses EVIOCGRAB, writes input events, reconstructs text, or sends input data over the network.
+The main thread blocks in epoll on libevdev descriptors, inotify, a private same-user Unix socket, signal descriptors, and armed timers. Keyboard classification accepts devices with typing/navigation/function-key capabilities, including sparse macro devices. A KEY_2 press from a virtual/uinput device is ignored, so injected macro input such as Lunge Swapper's weapon key produces no sound while the physical 2 key still does. Virtual devices are detected through their `/sys/devices/virtual/input` sysfs location or a BUS_VIRTUAL id. Virtual and unspecified bus types are otherwise accepted. Mouse-only devices, power-button-only devices, and mouse-button events on hybrid devices are excluded. Hotplug notifications rescan devices; libevdev synchronization drops recovered state events instead of replaying lost presses. The daemon never uses EVIOCGRAB, writes input events, reconstructs text, or sends input data over the network.
 
 Each descriptor tracks held-key state. Reports with the same physical identity, key, and a timestamp within 2 ms are suppressed as duplicates. Separate keyboards have independent identities. This is a duplicate-report heuristic, not a guarantee for every unusual composite keyboard or firmware.
 
@@ -149,7 +147,7 @@ See [the test report](reports/RESULTS.md), [raw measurements](reports/benchmark-
 
 Core tests exercise queue bounds and concurrent producer/consumer ordering, category selection, sample decoding, polyphony, deterministic voice stealing, clipping bounds, stale event rejection, silent output, config roundtrip, invalid numeric rejection, and allocation-free rendering. AddressSanitizer and UndefinedBehaviorSanitizer also passed.
 
-```fish
+```bash
 ctest --test-dir build-release --output-on-failure
 dbus-run-session -- bash tests/session-test.sh
 ```
