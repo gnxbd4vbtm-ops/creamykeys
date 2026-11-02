@@ -97,9 +97,18 @@ int main(int argc, char **argv)
 	c.enabled = false;
 	c.volume = .7;
 	c.idle_ms = 0;
+	c.voice_chat = false;
+	c.mix_mic = false;
+	c.mic_only = false;
 	ck::save_config(path, c);
 	auto loaded = ck::load_config(path);
-	CHECK(!loaded.enabled && loaded.volume == c.volume && loaded.idle_ms == 0);
+	CHECK(!loaded.enabled && loaded.volume == c.volume && loaded.idle_ms == 0 && !loaded.voice_chat && !loaded.mix_mic && !loaded.mic_only);
+	{
+		std::ofstream defconf(path);
+		defconf << "enabled = true\n";
+		auto defloaded = ck::load_config(path);
+		CHECK(defloaded.mic_only); // mic-only defaults to on: key sounds only in the mic
+	}
 	{
 		std::ofstream invalid(path);
 		invalid << "volume = nan\n";

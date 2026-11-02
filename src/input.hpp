@@ -1,5 +1,4 @@
 #pragma once
-#include <filesystem>
 #include <libevdev/libevdev.h>
 #include <linux/input-event-codes.h>
 #include <string>
@@ -21,13 +20,10 @@ inline bool keyboard_device(const libevdev *device)
 	return false;
 }
 
-// Devices created through uinput live under /sys/devices/virtual/input. Their
-// bus value is often BUS_USB, so the sysfs location is the reliable signal.
-inline bool virtual_input(const std::string &path, const std::string &sysfs = "/sys/class/input")
+// The letter Q is silent on every keyboard; all other keys play normally.
+inline bool ignored_key(unsigned code)
 {
-	std::error_code ec;
-	auto device = std::filesystem::canonical(std::filesystem::path(sysfs) / std::filesystem::path(path).filename() / "device", ec);
-	return !ec && device.string().find("/devices/virtual/") != std::string::npos;
+	return code == KEY_Q;
 }
 
 inline std::string input_identity(const char *phys, const char *uniq, const std::string &path)

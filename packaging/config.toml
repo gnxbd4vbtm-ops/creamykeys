@@ -7,3 +7,6 @@ play_on_repeat = false
 max_voices = 24
 follow_default_sink = true
 idle_timeout_ms = 5000
+voice_chat = true
+mix_microphone = true
+mic_only = true

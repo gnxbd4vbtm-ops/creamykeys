@@ -15,7 +15,8 @@ static_assert(std::atomic<uint64_t>::is_always_lock_free);
 
 struct Config
 {
-	bool enabled = true, randomize = true, repeat = false, follow = true;
+	bool enabled = true, randomize = true, repeat = false, follow = true,
+	     voice_chat = true, mix_mic = true, mic_only = true;
 	float volume = .35f, pitch = .025f;
 	unsigned voices = 24, idle_ms = 5000;
 	std::string pack = "creamy";

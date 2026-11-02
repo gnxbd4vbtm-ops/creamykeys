@@ -123,6 +123,72 @@ static void drain(int fd)
 	}
 }
 
+static void link_ports(const std::string &out_p, const std::string &in_p, bool passive = true)
+{
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0)
+		{
+			dup2(devnull, STDOUT_FILENO);
+			dup2(devnull, STDERR_FILENO);
+			close(devnull);
+		}
+		if (passive)
+			execlp("pw-link", "pw-link", "-P", out_p.c_str(), in_p.c_str(), nullptr);
+		else
+			execlp("pw-link", "pw-link", out_p.c_str(), in_p.c_str(), nullptr);
+		_exit(1);
+	}
+	if (pid > 0)
+	{
+		int status = 0;
+		waitpid(pid, &status, 0);
+	}
+}
+
+static void unlink_ports(const std::string &out_p, const std::string &in_p)
+{
+	pid_t pid = fork();
+	if (pid == 0)
+	{
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0)
+		{
+			dup2(devnull, STDOUT_FILENO);
+			dup2(devnull, STDERR_FILENO);
+			close(devnull);
+		}
+		execlp("pw-link", "pw-link", "-d", out_p.c_str(), in_p.c_str(), nullptr);
+		_exit(1);
+	}
+	if (pid > 0)
+	{
+		int status = 0;
+		waitpid(pid, &status, 0);
+	}
+}
+
+static std::vector<std::string> get_output_ports()
+{
+	std::vector<std::string> ports;
+	FILE *pipe = popen("pw-link -o", "r");
+	if (!pipe)
+		return ports;
+	char buffer[512];
+	while (fgets(buffer, sizeof(buffer), pipe))
+	{
+		std::string s = buffer;
+		while (!s.empty() && (s.back() == '\n' || s.back() == '\r'))
+			s.pop_back();
+		if (!s.empty())
+			ports.push_back(s);
+	}
+	pclose(pipe);
+	return ports;
+}
+
 struct Audio
 {
 	Mixer &mixer;
@@ -133,10 +199,14 @@ struct Audio
 	pw_stream *stream = nullptr;
 	pw_registry *registry = nullptr;
 	pw_metadata *metadata = nullptr;
+	pw_proxy *virtual_source = nullptr;
 	spa_hook stream_hook{}, core_hook{}, registry_hook{}, metadata_hook{};
-	std::string sink;
+	std::string sink, source;
 	uint32_t metadata_id = SPA_ID_INVALID;
 	bool follow = true;
+	bool voice_chat = true;
+	bool mix_mic = true;
+	bool mic_only = true;
 	std::atomic<int> state{PW_STREAM_STATE_UNCONNECTED};
 
 	static void process(void *userdata)
@@ -169,6 +239,76 @@ struct Audio
 		(void)write(notify, &one, sizeof one);
 	}
 
+	void init_virtual_source()
+	{
+		if (virtual_source || !voice_chat || !core)
+			return;
+		pw_thread_loop_lock(loop);
+		auto props = pw_properties_new(
+			"factory.name", "support.null-audio-sink",
+			"node.name", "creamykeys",
+			"node.description", "creamykeys",
+			"media.class", "Audio/Source/Virtual",
+			"audio.position", "[ FL FR ]",
+			"object.linger", "false",
+			nullptr);
+		virtual_source = reinterpret_cast<pw_proxy *>(pw_core_create_object(
+			core, "adapter", PW_TYPE_INTERFACE_Node, PW_VERSION_NODE, &props->dict, 0));
+		pw_thread_loop_unlock(loop);
+	}
+
+	void destroy_virtual_source()
+	{
+		if (virtual_source)
+		{
+			pw_thread_loop_lock(loop);
+			pw_proxy_destroy(virtual_source);
+			virtual_source = nullptr;
+			pw_thread_loop_unlock(loop);
+		}
+	}
+
+	void route_source()
+	{
+		if (!virtual_source || !voice_chat)
+			return;
+		link_ports("creamykeys:output_FL", "creamykeys:input_FL", true);
+		link_ports("creamykeys:output_FR", "creamykeys:input_FR", true);
+		auto ports = get_output_ports();
+		std::vector<std::string> mic_ports;
+		if (!source.empty())
+		{
+			for (const auto &p : ports)
+				if (!p.starts_with("creamykeys:") && p.find(source) != std::string::npos &&
+					p.find(":capture_") != std::string::npos)
+					mic_ports.push_back(p);
+		}
+		if (mic_ports.empty())
+		{
+			for (const auto &p : ports)
+				if (!p.starts_with("creamykeys:") && p.find(":capture_") != std::string::npos)
+					mic_ports.push_back(p);
+		}
+		for (const auto &p : mic_ports)
+		{
+			// mic-only mode sends key sounds to the virtual mic without your voice.
+			if (!mix_mic || mic_only)
+			{
+				unlink_ports(p, "creamykeys:input_FL");
+				unlink_ports(p, "creamykeys:input_FR");
+			}
+			else if (p.ends_with("_FL") || p.ends_with("_1"))
+				link_ports(p, "creamykeys:input_FL", true);
+			else if (p.ends_with("_FR") || p.ends_with("_2"))
+				link_ports(p, "creamykeys:input_FR", true);
+			else if (p.ends_with("_MONO") || p.find("capture") != std::string::npos)
+			{
+				link_ports(p, "creamykeys:input_FL", true);
+				link_ports(p, "creamykeys:input_FR", true);
+			}
+		}
+	}
+
 	static void changed(void *p, pw_stream_state, pw_stream_state s, const char *)
 	{
 		auto &a = *static_cast<Audio *>(p);
@@ -176,7 +316,10 @@ struct Audio
 		if (s == PW_STREAM_STATE_ERROR || s == PW_STREAM_STATE_UNCONNECTED)
 			a.signal();
 		if (s == PW_STREAM_STATE_PAUSED)
+		{
 			a.route();
+			a.route_source();
+		}
 	}
 
 	static void error(void *p, uint32_t id, int, int res, const char *)
@@ -201,17 +344,32 @@ struct Audio
 	static int property(void *p, uint32_t subject, const char *key, const char *, const char *value)
 	{
 		auto &a = *static_cast<Audio *>(p);
-		if (subject == PW_ID_CORE && key && std::strcmp(key, "default.audio.sink") == 0)
+		if (subject == PW_ID_CORE && key)
 		{
-			a.sink.clear();
-			if (value)
+			if (std::strcmp(key, "default.audio.sink") == 0)
 			{
-				std::cmatch match;
-				static const std::regex re("\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
-				if (std::regex_search(value, match, re))
-					a.sink = match[1];
+				a.sink.clear();
+				if (value)
+				{
+					std::cmatch match;
+					static const std::regex re("\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+					if (std::regex_search(value, match, re))
+						a.sink = match[1];
+				}
+				a.route();
 			}
-			a.route();
+			else if (std::strcmp(key, "default.audio.source") == 0)
+			{
+				a.source.clear();
+				if (value)
+				{
+					std::cmatch match;
+					static const std::regex re("\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+					if (std::regex_search(value, match, re))
+						a.source = match[1];
+				}
+				a.route_source();
+			}
 		}
 		return 0;
 	}
@@ -245,6 +403,7 @@ struct Audio
 			a.metadata = nullptr;
 			a.metadata_id = SPA_ID_INVALID;
 			a.sink.clear();
+			a.source.clear();
 		}
 	}
 
@@ -252,6 +411,9 @@ struct Audio
 	{
 		try
 		{
+			voice_chat = mixer.config.voice_chat;
+			mix_mic = mixer.config.mix_mic;
+			mic_only = mixer.config.mic_only;
 			loop = pw_thread_loop_new("creamykeys", nullptr);
 			if (!loop)
 				throw std::runtime_error("PipeWire loop allocation failed");
@@ -302,6 +464,18 @@ struct Audio
 				throw std::runtime_error("PipeWire stream connect failed");
 			if (pw_thread_loop_start(loop) < 0)
 				throw std::runtime_error("PipeWire thread failed");
+			if (voice_chat)
+			{
+				init_virtual_source();
+				for (int i = 0; i < 20; ++i)
+				{
+					int r = system("pw-link -i | grep -q 'creamykeys:input_FL' 2>/dev/null");
+					if (r == 0)
+						break;
+					usleep(10000);
+				}
+				route_source();
+			}
 		}
 		catch (...)
 		{
@@ -312,6 +486,7 @@ struct Audio
 
 	void cleanup()
 	{
+		destroy_virtual_source();
 		if (loop)
 			pw_thread_loop_stop(loop);
 		if (metadata)
@@ -400,6 +575,28 @@ struct Audio
 		pw_thread_loop_unlock(loop);
 		if (res < 0)
 			throw std::runtime_error("PipeWire state swap failed");
+
+		bool vc_changed = (voice_chat != c.voice_chat);
+		voice_chat = c.voice_chat;
+		mix_mic = c.mix_mic;
+		mic_only = c.mic_only;
+		if (vc_changed)
+		{
+			if (voice_chat)
+			{
+				init_virtual_source();
+				for (int i = 0; i < 20; ++i)
+				{
+					int r = system("pw-link -i | grep -q 'creamykeys:input_FL' 2>/dev/null");
+					if (r == 0)
+						break;
+					usleep(10000);
+				}
+			}
+			else
+				destroy_virtual_source();
+		}
+		route_source();
 	}
 };
 
@@ -408,11 +605,10 @@ struct Device
 	FD fd;
 	libevdev *ev = nullptr;
 	std::string path, identity;
-	bool virtual_device = false;
 	std::bitset<KEY_CNT> held;
 
-	Device(FD f, libevdev *e, std::string p, std::string ident, bool virt)
-		: fd(std::move(f)), ev(e), path(std::move(p)), identity(std::move(ident)), virtual_device(virt) {}
+	Device(FD f, libevdev *e, std::string p, std::string ident)
+		: fd(std::move(f)), ev(e), path(std::move(p)), identity(std::move(ident)) {}
 
 	~Device()
 	{
@@ -508,10 +704,9 @@ struct Daemon
 			const char *phys = libevdev_get_phys(ev);
 			const char *uniq = libevdev_get_uniq(ev);
 			std::string identity = input_identity(phys, uniq, p);
-			bool virtual_device = virtual_input(p) || libevdev_get_id_bustype(ev) == BUS_VIRTUAL;
 			int n = fd;
 			add(n);
-			devices.emplace(n, std::make_unique<Device>(std::move(fd), ev, p, identity, virtual_device));
+			devices.emplace(n, std::make_unique<Device>(std::move(fd), ev, p, identity));
 		}
 	}
 
@@ -595,9 +790,8 @@ struct Daemon
 			}
 			if (e.type != EV_KEY || !keyboard_event(e.code))
 				continue;
-			// Virtual macro devices often inject KEY_2. Ignore only that key
-			// from virtual devices so physical keyboards still play normally.
-			if (d.virtual_device && e.code == KEY_2)
+			// The letter Q is silent on physical and virtual keyboards alike.
+			if (ck::ignored_key(e.code))
 				continue;
 			if (e.value == 0)
 			{
@@ -654,6 +848,8 @@ struct Daemon
 		s << "enabled=" << std::boolalpha << config.enabled << " keyboards=" << devices.size()
 		  << " inaccessible_devices=" << denied << " volume=" << config.volume
 		  << " pack=" << config.pack << " idle_timeout_ms=" << config.idle_ms
+		  << " voice_chat=" << config.voice_chat << " mix_microphone=" << config.mix_mic
+		  << " mic_only=" << config.mic_only
 		  << " audio_state=" << (audio ? audio->state.load() : -1)
 		  << " audio_active=" << audio_active << " benchmark=" << benchmarking << "\nplayed=" << n
 		  << " queue_drops=" << m.dropped.load() << " voice_steals=" << m.stolen.load()
@@ -714,6 +910,39 @@ struct Daemon
 			next.volume = std::stof(arg, &pos);
 			if (pos != arg.size() || !std::isfinite(next.volume) || next.volume < 0 || next.volume > 1)
 				throw std::runtime_error("Volume must be 0..1");
+		}
+		else if (cmd == "voice-chat" || cmd == "--voice-chat")
+		{
+			if (arg.empty() || arg == "toggle")
+				next.voice_chat = !next.voice_chat;
+			else if (arg == "on" || arg == "true" || arg == "1")
+				next.voice_chat = true;
+			else if (arg == "off" || arg == "false" || arg == "0")
+				next.voice_chat = false;
+			else
+				throw std::runtime_error("voice-chat must be true or false");
+		}
+		else if (cmd == "mic" || cmd == "--mic" || cmd == "-m")
+		{
+			if (arg.empty() || arg == "toggle")
+				next.mix_mic = !next.mix_mic;
+			else if (arg == "on" || arg == "true" || arg == "1")
+				next.mix_mic = true;
+			else if (arg == "off" || arg == "false" || arg == "0")
+				next.mix_mic = false;
+			else
+				throw std::runtime_error("mic must be true or false");
+		}
+		else if (cmd == "mic-only" || cmd == "--mic-only")
+		{
+			if (arg.empty() || arg == "toggle")
+				next.mic_only = !next.mic_only;
+			else if (arg == "on" || arg == "true" || arg == "1")
+				next.mic_only = true;
+			else if (arg == "off" || arg == "false" || arg == "0")
+				next.mic_only = false;
+			else
+				throw std::runtime_error("mic-only must be true or false");
 		}
 		else if (cmd == "pack")
 		{
@@ -1054,6 +1283,7 @@ int main(int argc, char **argv)
 		{
 			std::cout << "creamykeys: toggle daemon on/off and remember across reboots\n"
 						 "creamykeys start|stop|restart|status|enable|disable|toggle|volume 0..1|"
+						 "--mic [true|false]|--mic-only [true|false]|--voice-chat [true|false]|"
 						 "pack list|pack set NAME|benchmark [typing|burst]|reload\n"
 						 "creamykeys -s|--soundpack PATH.zip: import and select a Mechvibes pack\n";
 			return 0;
@@ -1067,6 +1297,123 @@ int main(int argc, char **argv)
 		if (cmd == "status" && argc == 2 && !fs::exists(runtime() / "control.sock"))
 		{
 			std::cout << "CreamyKeys off (not running)\n";
+			return 0;
+		}
+		if (cmd.starts_with("--mic=") || cmd.starts_with("-m="))
+		{
+			auto eq = cmd.find('=');
+			std::string val = cmd.substr(eq + 1);
+			if (argc != 2)
+				throw std::runtime_error("Usage: creamykeys --mic=true|false");
+			if (fs::exists(runtime() / "control.sock"))
+				return request("mic " + val);
+			auto config = load_config(config_path());
+			if (val == "true" || val == "on" || val == "1")
+				config.mix_mic = true;
+			else if (val == "false" || val == "off" || val == "0")
+				config.mix_mic = false;
+			else
+				throw std::runtime_error("mic must be true or false");
+			save_config(config_path(), config);
+			std::cout << "Microphone mixing: " << (config.mix_mic ? "on" : "off") << '\n';
+			return 0;
+		}
+		if (cmd == "--mic" || cmd == "-m" || cmd == "mic")
+		{
+			if (argc > 3)
+				throw std::runtime_error("Usage: creamykeys --mic [true|false]");
+			std::string val = argc == 3 ? argv[2] : "";
+			if (fs::exists(runtime() / "control.sock"))
+				return request(val.empty() ? "mic" : "mic " + val);
+			auto config = load_config(config_path());
+			if (val.empty() || val == "toggle")
+				config.mix_mic = !config.mix_mic;
+			else if (val == "true" || val == "on" || val == "1")
+				config.mix_mic = true;
+			else if (val == "false" || val == "off" || val == "0")
+				config.mix_mic = false;
+			else
+				throw std::runtime_error("mic must be true or false");
+			save_config(config_path(), config);
+			std::cout << "Microphone mixing: " << (config.mix_mic ? "on" : "off") << '\n';
+			return 0;
+		}
+		if (cmd.starts_with("--mic-only="))
+		{
+			auto eq = cmd.find('=');
+			std::string val = cmd.substr(eq + 1);
+			if (argc != 2)
+				throw std::runtime_error("Usage: creamykeys --mic-only=true|false");
+			if (fs::exists(runtime() / "control.sock"))
+				return request("mic-only " + val);
+			auto config = load_config(config_path());
+			if (val == "true" || val == "on" || val == "1")
+				config.mic_only = true;
+			else if (val == "false" || val == "off" || val == "0")
+				config.mic_only = false;
+			else
+				throw std::runtime_error("mic-only must be true or false");
+			save_config(config_path(), config);
+			std::cout << "Mic-only mode: " << (config.mic_only ? "on (key sounds only)" : "off") << '\n';
+			return 0;
+		}
+		if (cmd == "--mic-only" || cmd == "mic-only")
+		{
+			if (argc > 3)
+				throw std::runtime_error("Usage: creamykeys --mic-only [true|false]");
+			std::string val = argc == 3 ? argv[2] : "";
+			if (fs::exists(runtime() / "control.sock"))
+				return request(val.empty() ? "mic-only" : "mic-only " + val);
+			auto config = load_config(config_path());
+			if (val.empty() || val == "toggle")
+				config.mic_only = !config.mic_only;
+			else if (val == "true" || val == "on" || val == "1")
+				config.mic_only = true;
+			else if (val == "false" || val == "off" || val == "0")
+				config.mic_only = false;
+			else
+				throw std::runtime_error("mic-only must be true or false");
+			save_config(config_path(), config);
+			std::cout << "Mic-only mode: " << (config.mic_only ? "on (key sounds only)" : "off") << '\n';
+			return 0;
+		}
+		if (cmd.starts_with("--voice-chat="))
+		{
+			auto eq = cmd.find('=');
+			std::string val = cmd.substr(eq + 1);
+			if (argc != 2)
+				throw std::runtime_error("Usage: creamykeys --voice-chat=true|false");
+			if (fs::exists(runtime() / "control.sock"))
+				return request("voice-chat " + val);
+			auto config = load_config(config_path());
+			if (val == "true" || val == "on" || val == "1")
+				config.voice_chat = true;
+			else if (val == "false" || val == "off" || val == "0")
+				config.voice_chat = false;
+			else
+				throw std::runtime_error("voice-chat must be true or false");
+			save_config(config_path(), config);
+			std::cout << "Voice chat virtual device: " << (config.voice_chat ? "on" : "off") << '\n';
+			return 0;
+		}
+		if (cmd == "--voice-chat" || cmd == "voice-chat")
+		{
+			if (argc > 3)
+				throw std::runtime_error("Usage: creamykeys --voice-chat [true|false]");
+			std::string val = argc == 3 ? argv[2] : "";
+			if (fs::exists(runtime() / "control.sock"))
+				return request(val.empty() ? "voice-chat" : "voice-chat " + val);
+			auto config = load_config(config_path());
+			if (val.empty() || val == "toggle")
+				config.voice_chat = !config.voice_chat;
+			else if (val == "true" || val == "on" || val == "1")
+				config.voice_chat = true;
+			else if (val == "false" || val == "off" || val == "0")
+				config.voice_chat = false;
+			else
+				throw std::runtime_error("voice-chat must be true or false");
+			save_config(config_path(), config);
+			std::cout << "Voice chat virtual device: " << (config.voice_chat ? "on" : "off") << '\n';
 			return 0;
 		}
 		if (cmd == "pack")
@@ -1091,7 +1438,8 @@ int main(int argc, char **argv)
 				return request("pack " + std::string(argv[3]));
 			throw std::runtime_error("Usage: creamykeys pack list | pack set NAME");
 		}
-		if ((cmd == "volume" && argc != 3) || (cmd == "benchmark" && argc != 2 && argc != 3) || (cmd != "volume" && cmd != "benchmark" && argc != 2))
+		if ((cmd == "volume" && argc != 3) || (cmd == "benchmark" && argc != 2 && argc != 3) ||
+		    (cmd != "volume" && cmd != "benchmark" && argc != 2))
 			throw std::runtime_error("Invalid arguments");
 		return request(cmd + (argc == 3 ? " " + std::string(argv[2]) : ""));
 	}

@@ -23,6 +23,12 @@ creamykeys disable
 creamykeys enable
 creamykeys toggle
 creamykeys volume 0.5
+creamykeys voice-chat on # enable virtual microphone device for voice chat
+creamykeys voice-chat off
+creamykeys mic on # mix physical microphone into the virtual mic source
+creamykeys mic off
+creamykeys mic-only on # only key sounds go to the virtual mic (default)
+creamykeys mic-only off # also mix your physical microphone with the key sounds
 creamykeys pack list
 creamykeys pack set smooth
 creamykeys reload
@@ -33,7 +39,7 @@ creamykeys benchmark typing
 creamykeys benchmark burst
 ```
 
-`creamykeys` and `creamykeys toggle` both toggle the whole service. `start` turns it on and remembers on; `stop` turns it off and remembers off. `restart` turns it on and remembers on. `enable` and `disable` are separate playback controls for an already running daemon; disable closes keyboard descriptors. Use the bare command or `stop` when you want the process and future autostart turned off.
+`creamykeys` and `creamykeys toggle` both toggle the whole service. `start` turns it on and remembers on; `stop` turns it off and remembers off. `restart` turns it on and remembers on. `enable` and `disable` are separate playback controls for an already running daemon; disable closes keyboard descriptors. `voice-chat on|off` controls the virtual input device for voice chat, `mic on|off` controls mixing your physical microphone with typing sounds, and `mic-only on|off` restricts the virtual mic to key sounds only (on by default). Use the bare command or `stop` when you want the process and future autostart turned off.
 
 A benchmark plays synthetic category events for five seconds, temporarily closes keyboard descriptors, then rediscovers the keyboards. `typing` produces 10 events/s and `burst` 600 events/s with six simultaneous categories. `benchmark` alone selects burst. Nothing is injected into the desktop's input stack. Read `status` after completion. Counters are cumulative since daemon startup. Use `bash tools/benchmark.sh` for reproducible CPU and memory measurements.
 
@@ -71,9 +77,12 @@ play_on_repeat = false
 max_voices = 24
 follow_default_sink = true
 idle_timeout_ms = 5000
+voice_chat = true
+mix_microphone = true
+mic_only = true
 ```
 
-Volume is 0–1; pitch variation is 0–0.1; voice count is 1–64. The optional idle timeout is 0–60,000 ms and defaults to 5,000 ms. Set `idle_timeout_ms = 0` to keep audio running after startup, avoid repeated cold wake-up delays, and accept recurring PipeWire callbacks while idle. Unknown and duplicate keys, nonfinite numbers, and invalid values are rejected. Editing or atomically replacing `config.toml` reloads it through inotify. You can also run `creamykeys reload` or send SIGHUP. A failed live reload leaves the current working configuration and pack in use. The daemon logs errors and device counts, never key identities or text.
+Volume is 0–1; pitch variation is 0–0.1; voice count is 1–64. The optional idle timeout is 0–60,000 ms and defaults to 5,000 ms. `voice_chat` (default: true) provides a virtual audio source named `creamykeys` that voice chat applications (Discord, browser, OBS, Zoom, etc.) can select as their input device / microphone; your key sounds are mixed into it so other participants hear your typing, not just you. `mix_microphone` (default: true) additionally routes your default physical microphone into `creamykeys`, so participants hear both your voice and your key sounds. `mic_only` (default: true) restricts the virtual mic to key sounds only — your voice is not sent — so people hear only creamy keys in the mic and nothing else. Set `mic_only = false` together with `mix_microphone = true` to send voice plus key sounds. Unknown and duplicate keys, nonfinite numbers, and invalid values are rejected. Editing or atomically replacing `config.toml` reloads it through inotify. You can also run `creamykeys reload` or send SIGHUP. A failed live reload leaves the current working configuration and pack in use. The daemon logs errors and device counts, never key identities or text.
 
 Live changes reset active sounds before swapping the new settings. A successful configuration edit can therefore cut a currently playing sound short. Startup with an invalid configuration or pack fails with a clear error in `journalctl --user -u creamykeys.service`.
 
@@ -123,7 +132,7 @@ build-release/creamykeys-generate soundpacks/smooth
 
 ## Audio and input behavior
 
-The main thread blocks in epoll on libevdev descriptors, inotify, a private same-user Unix socket, signal descriptors, and armed timers. Keyboard classification accepts devices with typing/navigation/function-key capabilities, including sparse macro devices. A KEY_2 press from a virtual/uinput device is ignored, so injected macro input such as Lunge Swapper's weapon key produces no sound while the physical 2 key still does. Virtual devices are detected through their `/sys/devices/virtual/input` sysfs location or a BUS_VIRTUAL id. Virtual and unspecified bus types are otherwise accepted. Mouse-only devices, power-button-only devices, and mouse-button events on hybrid devices are excluded. Hotplug notifications rescan devices; libevdev synchronization drops recovered state events instead of replaying lost presses. The daemon never uses EVIOCGRAB, writes input events, reconstructs text, or sends input data over the network.
+The main thread blocks in epoll on libevdev descriptors, inotify, a private same-user Unix socket, signal descriptors, and armed timers. Keyboard classification accepts devices with typing/navigation/function-key capabilities, including sparse macro devices. The letter Q is ignored on physical and virtual keyboards alike, while other keys such as 2 play normally. Virtual and unspecified bus types are accepted. Mouse-only devices, power-button-only devices, and mouse-button events on hybrid devices are excluded. Hotplug notifications rescan devices; libevdev synchronization drops recovered state events instead of replaying lost presses. The daemon never uses EVIOCGRAB, writes input events, reconstructs text, or sends input data over the network.
 
 Each descriptor tracks held-key state. Reports with the same physical identity, key, and a timestamp within 2 ms are suppressed as duplicates. Separate keyboards have independent identities. This is a duplicate-report heuristic, not a guarantee for every unusual composite keyboard or firmware.
 

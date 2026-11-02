@@ -94,6 +94,12 @@ Config load_config(const std::filesystem::path &path)
 				throw std::runtime_error("idle_timeout_ms must be 0..60000");
 			c.idle_ms = unsigned(n);
 		}
+		else if (key == "voice_chat")
+			c.voice_chat = boolean();
+		else if (key == "mix_microphone" || key == "mix_mic")
+			c.mix_mic = boolean();
+		else if (key == "mic_only")
+			c.mic_only = boolean();
 		else if (key == "sound_pack")
 		{
 			if (v.size() < 3 || v.front() != '"' || v.back() != '"')
@@ -124,7 +130,8 @@ void save_config(const std::filesystem::path &p, const Config &c)
 		  << "\nsound_pack = \"" << c.pack << "\"\npitch_variation = " << c.pitch
 		  << "\nrandomize_samples = " << c.randomize << "\nplay_on_repeat = " << c.repeat
 		  << "\nmax_voices = " << c.voices << "\nfollow_default_sink = " << c.follow
-		  << "\nidle_timeout_ms = " << c.idle_ms << '\n';
+		  << "\nidle_timeout_ms = " << c.idle_ms << "\nvoice_chat = " << c.voice_chat
+		  << "\nmix_microphone = " << c.mix_mic << "\nmic_only = " << c.mic_only << '\n';
 		f.flush();
 		if (!f)
 			throw std::runtime_error("Config write failed");

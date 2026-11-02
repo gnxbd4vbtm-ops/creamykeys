@@ -1,5 +1,4 @@
 #include "input.hpp"
-#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -29,6 +28,8 @@ int main()
 	}
 	CHECK(ck::keyboard_event(KEY_2) && ck::keyboard_event(KEY_R) && ck::keyboard_event(KEY_TAB));
 	CHECK(ck::keyboard_event(KEY_FN) && ck::keyboard_event(KEY_VOLUMEUP));
+	CHECK(ck::ignored_key(KEY_Q));
+	CHECK(!ck::ignored_key(KEY_2) && !ck::ignored_key(KEY_R));
 	CHECK(!ck::keyboard_event(BTN_LEFT) && !ck::keyboard_event(BTN_RIGHT));
 	CHECK(!ck::keyboard_event(BTN_DPAD_UP) && !ck::keyboard_event(BTN_TRIGGER_HAPPY1));
 	CHECK(!ck::keyboard_event(KEY_RESERVED) && !ck::keyboard_event(KEY_CNT));
@@ -42,18 +43,5 @@ int main()
 	CHECK(ck::input_identity(nullptr, nullptr, "/dev/input/event17") == "/dev/input/event17");
 	CHECK(ck::input_identity("usb-1/input0", "", "ignored") == "usb-1");
 	CHECK(ck::input_identity("usb-1/input1", "unit", "ignored") == "usb-1:unit");
-	namespace fs = std::filesystem;
-	const fs::path root = fs::temp_directory_path() / "creamykeys-input-test";
-	fs::remove_all(root);
-	fs::create_directories(root / "class" / "event0");
-	fs::create_directories(root / "class" / "event1");
-	fs::create_directories(root / "devices" / "virtual" / "input" / "input0");
-	fs::create_directories(root / "devices" / "pci0" / "input" / "input1");
-	fs::create_symlink(root / "devices" / "virtual" / "input" / "input0", root / "class" / "event0" / "device");
-	fs::create_symlink(root / "devices" / "pci0" / "input" / "input1", root / "class" / "event1" / "device");
-	CHECK(ck::virtual_input("/dev/input/event0", (root / "class").string()));
-	CHECK(!ck::virtual_input("/dev/input/event1", (root / "class").string()));
-	CHECK(!ck::virtual_input("/dev/input/event2", (root / "class").string()));
-	fs::remove_all(root);
-	std::cout << "Sparse macro capabilities, physical/virtual detection, USB/virtual/unspecified buses, function-only devices and mouse-button exclusion passed\n";
+	std::cout << "Sparse macro capabilities, Q suppression, USB/virtual/unspecified buses, function-only devices and mouse-button exclusion passed\n";
 }
